@@ -6,21 +6,40 @@ A SQLite extension written in Rust that instruments database operations.
 
 Loads as a SQLite extension and creates a trace database along side the original database.
 
+# Quick Start
+Load the extension into SQLite at the sqlite3 command line:
+
+```sql
+.load target/release/libsqlite_instrument_rs.so
+```
+
+or in python
+
+```python
+import sqlite3
+conn = sqlite3.connect('my.db')
+conn.enable_load_extension(True)
+conn.load_extension('target/release/libsqlite_instrument_rs.so')
+```
+
+Then traces will be stored in `my.trace.db`
+
+# Dev
 ## Build
 
-```bash
-cargo build
-```
+  cargo build
 
 Creates `target/debug/libsqlite_instrument_rs.so`
 
-## Demo/Test
+## Test
 
-```bash
-uv run test.py
-```
+  uv run --directory test -- pytest
 
-This runs the Python test script that loads the extension into SQLite and verifies it works. The script uses Python 3.13 which has proper SQLite extension loading support.
+## Release
+
+  cargo build --release
+
+Creates `target/release/libsqlite_instrument_rs.so`
 
 ## Requirements
 

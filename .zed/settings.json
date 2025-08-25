@@ -20,6 +20,15 @@
           }
         }
       }
+    },
+    "pyright": {
+      "settings": {
+        "python.analysis": {
+          "diagnosticMode": "workspace",
+          "typeCheckingMode": "standard"
+        },
+        "python": {}
+      }
     }
   }
 }
