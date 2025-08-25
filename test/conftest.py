@@ -86,3 +86,15 @@ def client_engine(extension_path: Path, temp_db_path: Path) -> Iterator[Engine]:
     finally:
         if engine is not None:
             engine.connection.close()
+
+
+@pytest.fixture
+def trace_engine(temp_db_path: Path) -> Iterator[Engine]:
+    engine = None
+    try:
+        engine = Engine(temp_db_path.with_suffix('.trace.db'))
+
+        yield engine
+    finally:
+        if engine is not None:
+            engine.connection.close()
