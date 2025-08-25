@@ -1,15 +1,8 @@
-import sqlite3
+from tuplesaver.engine import Engine
+from tuplesaver.sql import select
+from conftest import ExecutionCount
 
 
-
-def test_instrumentation_tables_created(cursor: sqlite3.Cursor):
-    cursor.execute("""
-        SELECT name FROM sqlite_master
-        WHERE type='table' AND name LIKE '_y2k__%'
-        ORDER BY name
-    """)
-    tables = [row[0] for row in cursor.fetchall()]
-
-    expected_tables = {"_y2k__execution_counts", "_y2k__profile_log"}
-
-    assert set(tables) == expected_tables, f"Expected tables {expected_tables}, but got {tables}"
+def test_instrumentation_tables_exist(client_engine: Engine):
+    ecs = client_engine.query(*select(ExecutionCount)).fetchall()
+    assert len(ecs) == 0

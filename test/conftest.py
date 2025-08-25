@@ -1,22 +1,27 @@
 import pytest
-import sqlite3
 import tempfile
 import os
-import sys
+import platform
 
 from pathlib import Path
+from tuplesaver.engine import Engine
+from typing import NamedTuple
 from typing import Iterator
 
 
-@pytest.fixture(scope="session")
-def extension_path() -> Path:
+def pytest_configure(config):
+    config.EXTENSION_PATH = find_extension_path()
+    print(f"Extension path: {config.EXTENSION_PATH}")
+
+
+def find_extension_path() -> Path:
     project_root = Path(__file__).parent.parent
 
-    if sys.platform == 'linux':
+    if platform.system() == 'Linux':
         debug_path = project_root / "target" / "debug" / "libsqlite_instrument_rs.so"
         release_path = project_root / "target" / "release" / "libsqlite_instrument_rs.so"
     else:
-        raise NotImplementedError(f"Unsupported platform: {sys.platform}")
+        raise NotImplementedError(f"Unsupported platform: {platform.system()}")
 
     candidates = []
 
@@ -40,6 +45,12 @@ def extension_path() -> Path:
     return newest_path
 
 
+
+@pytest.fixture
+def extension_path(request) -> Path:
+    assert request.config.EXTENSION_PATH is not None
+    return request.config.EXTENSION_PATH
+
 @pytest.fixture
 def temp_db_path() -> Iterator[Path]:
     fd, temp_path = tempfile.mkstemp(suffix='.db', prefix='test_sqlite_')
@@ -55,24 +66,23 @@ def temp_db_path() -> Iterator[Path]:
             os.unlink(temp_path)
 
 
-@pytest.fixture
-def sqlite_connection(extension_path: Path, temp_db_path: Path) -> Iterator[sqlite3.Connection]:
-    conn = sqlite3.connect(str(temp_db_path))
 
-    try:
-        conn.enable_load_extension(True)
-        conn.load_extension(str(extension_path))
-
-        yield conn
-
-    finally:
-        conn.close()
+class ExecutionCount(NamedTuple):
+    id: int | None
+    hash: str | None
+    exe_count: int | None
+    sql_text: str | None
 
 
 @pytest.fixture
-def cursor(sqlite_connection: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
-    cursor = sqlite_connection.cursor()
+def client_engine(extension_path: Path, temp_db_path: Path) -> Iterator[Engine]:
+    engine = None
     try:
-        yield cursor
+        engine = Engine(temp_db_path)
+        engine.connection.enable_load_extension(True)
+        engine.connection.load_extension(str(extension_path))
+
+        yield engine
     finally:
-        cursor.close()
+        if engine is not None:
+            engine.connection.close()

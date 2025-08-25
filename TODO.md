@@ -1,2 +1,2 @@
 - split trace db to second file
-- use tuple saver in tests
+- unique constraint and trigger to count executions
