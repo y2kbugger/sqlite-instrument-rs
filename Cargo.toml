@@ -9,3 +9,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rusqlite = { version = "0.37", features = ["loadable_extension", "trace"], default-features = false }
+thiserror = "2.0.16"
