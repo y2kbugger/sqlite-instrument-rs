@@ -89,7 +89,9 @@ def client_engine(extension_path: Path, temp_db_path: Path) -> Iterator[Engine]:
 
 
 @pytest.fixture
-def trace_engine(temp_db_path: Path) -> Iterator[Engine]:
+def trace_engine(client_engine: Engine, temp_db_path: Path) -> Iterator[Engine]:
+    # Loading the extension in client_engine should create the trace database
+    # Now we can check that the trace database has the expected tables
     engine = None
     try:
         engine = Engine(temp_db_path.with_suffix('.trace.db'))
