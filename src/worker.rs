@@ -3,7 +3,7 @@
 //! Handles asynchronous logging of SQL trace data to files.
 
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::sync::{mpsc, Mutex};
 use std::thread::{self, JoinHandle};
 
@@ -27,25 +27,23 @@ pub fn initialize() -> LoggingSystem {
     let handle = thread::Builder::new()
         .name("logging-worker".into())
         .spawn(move || {
-            let mut file = OpenOptions::new()
+            let file = OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open("testicall.log")
                 .expect("Failed to open testicall.log");
+            let mut writer = BufWriter::new(file);
 
             for message in rx.iter() {
                 match message {
                     LogMessage::Sql(sql_text) => {
-                        if let Err(e) = writeln!(file, "{}", sql_text) {
+                        if let Err(e) = writeln!(writer, "{}", sql_text) {
                             eprintln!("Failed to write to log: {}", e);
-                        }
-                        if let Err(e) = file.flush() {
-                            eprintln!("Failed to flush log: {}", e);
                         }
                     }
                     LogMessage::Shutdown => {
                         // Flush and exit cleanly
-                        let _ = file.flush();
+                        let _ = writer.flush();
                         break;
                     }
                 }
