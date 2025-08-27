@@ -6,10 +6,13 @@
 use rusqlite::ffi;
 use rusqlite::trace::{TraceEvent, TraceEventCodes};
 use rusqlite::Connection;
+use std::sync::OnceLock;
 use thiserror::Error;
 
 use std::os::raw::{c_char, c_int};
 use std::path::Path;
+
+mod worker;
 
 #[derive(Debug, Error)]
 pub enum SqliteInstrumentError {
@@ -20,6 +23,56 @@ pub enum SqliteInstrumentError {
 }
 
 type Result<T> = std::result::Result<T, SqliteInstrumentError>;
+
+// Global logging system (sender + thread handle) initialized atomically
+static LOGGING_SYSTEM: OnceLock<worker::LoggingSystem> = OnceLock::new();
+
+// Trace callback function (must be a function pointer, not a closure)
+fn trace_callback(event: TraceEvent<'_>) {
+    match event {
+        TraceEvent::Stmt(_stmt, sql) => {
+            #[cfg(feature = "testing-logs")]
+            {
+                let debug_message = format!("DEBUG: STMT traced - {}", sql);
+                rusqlite::trace::log(ffi::SQLITE_WARNING, &debug_message);
+            }
+
+            // Safely copy the SQL string and send to logging thread
+            let owned_sql = sql.to_string();
+            if let Some((sender, _)) = LOGGING_SYSTEM.get() {
+                let _ = sender.send(worker::LogMessage::Sql(owned_sql));
+            }
+        }
+        TraceEvent::Profile(stmt, duration) => {
+            #[cfg(feature = "testing-logs")]
+            {
+                let debug_message = format!("DEBUG: PROFILE traced - {}", stmt.sql());
+                rusqlite::trace::log(ffi::SQLITE_WARNING, &debug_message);
+            }
+            std::hint::black_box(stmt);
+            std::hint::black_box(duration);
+        }
+        TraceEvent::Close(_conn) => {
+            #[cfg(feature = "testing-logs")]
+            {
+                let debug_message = "DEBUG: Connection closing";
+                rusqlite::trace::log(ffi::SQLITE_WARNING, &debug_message);
+            }
+            // Connection is closing - send shutdown signal and join thread
+            if let Some((sender, thread_handle)) = LOGGING_SYSTEM.get() {
+                let _ = sender.send(worker::LogMessage::Shutdown);
+
+                // Join the logging thread to ensure all messages are flushed
+                if let Ok(mut handle_opt) = thread_handle.lock() {
+                    if let Some(handle) = handle_opt.take() {
+                        let _ = handle.join();
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
 
 /// Entry point for SQLite to load the extension.
 /// See <https://sqlite.org/c3ref/load_extension.html> on this function's name and usage.
@@ -55,30 +108,15 @@ fn extension_init(conn: Connection) -> rusqlite::Result<bool> {
     // Create instrumentation tables in separate trace database
     create_trace_database(&trace_db_path, schema_sql)?;
 
+    // Initialize global logging system atomically (only once)
+    LOGGING_SYSTEM.get_or_init(worker::initialize);
+
     // Set up tracev2 callback to log SQL statements and execution times
     conn.trace_v2(
-        TraceEventCodes::SQLITE_TRACE_STMT | TraceEventCodes::SQLITE_TRACE_PROFILE,
-        Some(|event| match event {
-            TraceEvent::Stmt(stmt, sql) => {
-                #[cfg(feature = "testing-logs")]
-                {
-                    let debug_message = format!("DEBUG: STMT traced - {}", sql);
-                    rusqlite::trace::log(ffi::SQLITE_WARNING, &debug_message);
-                }
-                std::hint::black_box(stmt);
-                std::hint::black_box(sql);
-            }
-            TraceEvent::Profile(stmt, duration) => {
-                #[cfg(feature = "testing-logs")]
-                {
-                    let debug_message = format!("DEBUG: PROFILE traced - {}", stmt.sql());
-                    rusqlite::trace::log(ffi::SQLITE_WARNING, &debug_message);
-                }
-                std::hint::black_box(stmt);
-                std::hint::black_box(duration);
-            }
-            _ => {}
-        }),
+        TraceEventCodes::SQLITE_TRACE_STMT
+            | TraceEventCodes::SQLITE_TRACE_PROFILE
+            | TraceEventCodes::SQLITE_TRACE_CLOSE,
+        Some(trace_callback),
     );
 
     rusqlite::trace::log(
