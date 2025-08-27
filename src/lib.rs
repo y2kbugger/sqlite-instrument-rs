@@ -60,10 +60,20 @@ fn extension_init(conn: Connection) -> rusqlite::Result<bool> {
         TraceEventCodes::SQLITE_TRACE_STMT | TraceEventCodes::SQLITE_TRACE_PROFILE,
         Some(|event| match event {
             TraceEvent::Stmt(stmt, sql) => {
+                #[cfg(feature = "testing-logs")]
+                {
+                    let debug_message = format!("DEBUG: STMT traced - {}", sql);
+                    rusqlite::trace::log(ffi::SQLITE_WARNING, &debug_message);
+                }
                 std::hint::black_box(stmt);
                 std::hint::black_box(sql);
             }
             TraceEvent::Profile(stmt, duration) => {
+                #[cfg(feature = "testing-logs")]
+                {
+                    let debug_message = format!("DEBUG: PROFILE traced - {}", stmt.sql());
+                    rusqlite::trace::log(ffi::SQLITE_WARNING, &debug_message);
+                }
                 std::hint::black_box(stmt);
                 std::hint::black_box(duration);
             }
