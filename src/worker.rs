@@ -24,31 +24,34 @@ pub enum LogMessage {
 pub fn initialize() -> LoggingSystem {
     let (tx, rx) = mpsc::channel::<LogMessage>();
 
-    let handle = thread::spawn(move || {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("testicall.log")
-            .expect("Failed to open testicall.log");
+    let handle = thread::Builder::new()
+        .name("logging-worker".into())
+        .spawn(move || {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("testicall.log")
+                .expect("Failed to open testicall.log");
 
-        while let Ok(message) = rx.recv() {
-            match message {
-                LogMessage::Sql(sql_text) => {
-                    if let Err(e) = writeln!(file, "{}", sql_text) {
-                        eprintln!("Failed to write to log: {}", e);
+            while let Ok(message) = rx.recv() {
+                match message {
+                    LogMessage::Sql(sql_text) => {
+                        if let Err(e) = writeln!(file, "{}", sql_text) {
+                            eprintln!("Failed to write to log: {}", e);
+                        }
+                        if let Err(e) = file.flush() {
+                            eprintln!("Failed to flush log: {}", e);
+                        }
                     }
-                    if let Err(e) = file.flush() {
-                        eprintln!("Failed to flush log: {}", e);
+                    LogMessage::Shutdown => {
+                        // Flush and exit cleanly
+                        let _ = file.flush();
+                        break;
                     }
-                }
-                LogMessage::Shutdown => {
-                    // Flush and exit cleanly
-                    let _ = file.flush();
-                    break;
                 }
             }
-        }
-    });
+        })
+        .expect("Failed to spawn logging thread");
 
     (tx, Mutex::new(Some(handle)))
 }
