@@ -81,4 +81,4 @@ requires-dist = [
 [[package]]
 name = "tuplesaver"
 version = "0.1.0"
-source = { git = "https://github.com/y2kbugger/tuplesaver.git#68a061544a16879179ad69b849c9a3b9cffdd455" }
+source = { git = "https://github.com/y2kbugger/tuplesaver.git#58528fc2a55205531fa2b9793f4624a61b6aec99" }
