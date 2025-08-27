@@ -1,6 +1,7 @@
 from tuplesaver.engine import Engine
 from tuplesaver.sql import select
 from conftest import ExecutionCount
+from sqlite_log_capture import SqliteErrorLogCapture
 
 
 def test_instrumentation_tables_exist(trace_engine: Engine):
@@ -20,4 +21,17 @@ def test_names_of_each_db(client_engine: Engine, trace_engine: Engine):
 
     # Verify trace database path is based on main database path
     assert trace_db_path == client_db_path.replace('.db', '.trace.db')
-    assert False
+
+
+def test_trace_log(client_engine: Engine, trace_engine: Engine, sqlite_logged: SqliteErrorLogCapture):
+    with sqlite_logged:
+        client_engine.connection.execute("SELECT 1")
+
+    logs = set(sqlite_logged.get_messages())
+
+    expected_logs = {
+        'DEBUG: STMT traced - SELECT 1',
+        'DEBUG: PROFILE traced - SELECT 1'
+    }
+
+    assert logs == expected_logs

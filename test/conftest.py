@@ -2,6 +2,7 @@ import pytest
 import tempfile
 import os
 import platform
+from sqlite_log_capture import SqliteErrorLogCapture
 
 from pathlib import Path
 from tuplesaver.engine import Engine
@@ -44,12 +45,11 @@ def find_extension_path() -> Path:
     newest_path, mtime, build_type = candidates[0]
     return newest_path
 
-
-
 @pytest.fixture
 def extension_path(request) -> Path:
     assert request.config.EXTENSION_PATH is not None
     return request.config.EXTENSION_PATH
+
 
 @pytest.fixture
 def temp_db_path() -> Iterator[Path]:
@@ -66,13 +66,16 @@ def temp_db_path() -> Iterator[Path]:
             os.unlink(temp_path)
 
 
+@pytest.fixture
+def sqlite_logged():
+    return SqliteErrorLogCapture()
+
 
 class ExecutionCount(NamedTuple):
     id: int | None
     hash: str | None
     exe_count: int | None
     sql_text: str | None
-
 
 @pytest.fixture
 def client_engine(extension_path: Path, temp_db_path: Path) -> Iterator[Engine]:

@@ -7,6 +7,9 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+testing-logs = []
+
 [dependencies]
 rusqlite = { version = "0.37", features = ["loadable_extension", "trace"], default-features = false }
 thiserror = "2.0.16"
