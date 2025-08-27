@@ -4,6 +4,7 @@
 //! to collect execution statistics and performance data.
 
 use rusqlite::ffi;
+use rusqlite::trace::{TraceEvent, TraceEventCodes};
 use rusqlite::Connection;
 use thiserror::Error;
 
@@ -54,8 +55,21 @@ fn extension_init(conn: Connection) -> rusqlite::Result<bool> {
     // Create instrumentation tables in separate trace database
     create_trace_database(&trace_db_path, schema_sql)?;
 
-    // TODO: Set up tracing callbacks here
-    // This would involve registering trace callbacks for SQLITE_TRACE_STMT and SQLITE_TRACE_PROFILE
+    // Set up tracev2 callback to log SQL statements and execution times
+    conn.trace_v2(
+        TraceEventCodes::SQLITE_TRACE_STMT | TraceEventCodes::SQLITE_TRACE_PROFILE,
+        Some(|event| match event {
+            TraceEvent::Stmt(stmt, sql) => {
+                std::hint::black_box(stmt);
+                std::hint::black_box(sql);
+            }
+            TraceEvent::Profile(stmt, duration) => {
+                std::hint::black_box(stmt);
+                std::hint::black_box(duration);
+            }
+            _ => {}
+        }),
+    );
 
     rusqlite::trace::log(
         ffi::SQLITE_WARNING,
