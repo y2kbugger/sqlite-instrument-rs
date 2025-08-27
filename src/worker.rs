@@ -33,7 +33,7 @@ pub fn initialize() -> LoggingSystem {
                 .open("testicall.log")
                 .expect("Failed to open testicall.log");
 
-            while let Ok(message) = rx.recv() {
+            for message in rx.iter() {
                 match message {
                     LogMessage::Sql(sql_text) => {
                         if let Err(e) = writeln!(file, "{}", sql_text) {
